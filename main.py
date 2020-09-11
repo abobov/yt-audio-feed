@@ -7,6 +7,7 @@ import urllib.request
 from xml.etree import ElementTree as ET
 
 import pafy
+import pypandoc
 
 DEFAULT_LIMIT = 40
 NS_ATOM = 'http://www.w3.org/2005/Atom'
@@ -42,6 +43,11 @@ def get_mime_type_by_extension(extension):
     return 'audio'
 
 
+def summary_to_html(entry):
+    text = list(entry.iter('{' + NS_MEDIA + '}description'))[0].text
+    return pypandoc.convert_text(text, to='html', format='t2t')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('opml_file', help='OPML file from YouTube', type=argparse.FileType('r'))
@@ -61,6 +67,8 @@ def main():
     entries = get_entries(args.opml_file)
 
     for entry in entries[:min(args.limit, len(entries))]:
+        summary = ET.SubElement(entry, '{' + NS_ATOM + '}summary')
+        summary.text = summary_to_html(entry)
         yt_link = entry.find('{' + NS_ATOM + '}link').attrib['href']
         best_audio = pafy.new(yt_link).getbestaudio()
         if best_audio is not None:
