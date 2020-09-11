@@ -9,7 +9,9 @@ from xml.etree import ElementTree as ET
 import pafy
 import pypandoc
 
+
 DEFAULT_LIMIT = 40
+NS_MEDIA = 'http://search.yahoo.com/mrss/'
 NS_ATOM = 'http://www.w3.org/2005/Atom'
 
 
@@ -59,7 +61,7 @@ def main():
 
     ET.register_namespace('', NS_ATOM)
     ET.register_namespace('yt', 'http://www.youtube.com/xml/schemas/2015')
-    ET.register_namespace('media', 'http://search.yahoo.com/mrss/')
+    ET.register_namespace('media', NS_MEDIA)
 
     root = ET.Element('feed')
     title = ET.SubElement(root, 'title')
@@ -67,15 +69,18 @@ def main():
     entries = get_entries(args.opml_file)
 
     for entry in entries[:min(args.limit, len(entries))]:
+        author = entry.find('{' +NS_ATOM + '}author').find('{' + NS_ATOM + '}name').text
         summary = ET.SubElement(entry, '{' + NS_ATOM + '}summary')
         summary.text = summary_to_html(entry)
+        title = entry.find('{' + NS_ATOM + '}title')
+        title.text = title.text + ' | ' + author
         yt_link = entry.find('{' + NS_ATOM + '}link').attrib['href']
         try:
             best_audio = pafy.new(yt_link).getbestaudio()
         except IOError as e:
             continue
         if best_audio is not None:
-            content = list(entry.iter('{http://search.yahoo.com/mrss/}content'))[0]
+            content = list(entry.iter('{' + NS_MEDIA + '}content'))[0]
             content.attrib['url'] = best_audio.url
             content.attrib['type'] = get_mime_type_by_extension(best_audio.extension)
             root.append(entry)
