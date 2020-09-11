@@ -1,9 +1,14 @@
 import argparse
+import mimetypes
 import multiprocessing
+import signal
+import sys
 import urllib.request
 from xml.etree import ElementTree as ET
 
-FEED_SIZE = 40
+import pafy
+
+DEFAULT_LIMIT = 40
 NS_ATOM = 'http://www.w3.org/2005/Atom'
 
 
@@ -30,9 +35,20 @@ def get_entries(opml_file):
     return sorted(entries, key=extract_published, reverse=True)
 
 
+def get_mime_type_by_extension(extension):
+    key = '.' + extension
+    if key in mimetypes.types_map:
+        return mimetypes.types_map[key]
+    return 'audio'
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('opml_file')
+    parser.add_argument('opml_file', help='OPML file from YouTube', type=argparse.FileType('r'))
+    parser.add_argument('-o', '--output', help='Where to print XML output (default: stdout)',
+                        default=sys.stdout.buffer, type=argparse.FileType('wb'))
+    parser.add_argument('-n', '--limit', help=f'How many last videos to output (default: {DEFAULT_LIMIT})',
+                        type=int, default=DEFAULT_LIMIT)
     args = parser.parse_args()
 
     ET.register_namespace('', NS_ATOM)
@@ -44,11 +60,17 @@ def main():
     title.text = 'YouTube subscriptions'
     entries = get_entries(args.opml_file)
 
-    for entry in entries[:min(FEED_SIZE, len(entries))]:
-        root.append(entry)
-
-    ET.dump(root)
+    for entry in entries[:min(args.limit, len(entries))]:
+        yt_link = entry.find('{' + NS_ATOM + '}link').attrib['href']
+        best_audio = pafy.new(yt_link).getbestaudio()
+        if best_audio is not None:
+            content = list(entry.iter('{http://search.yahoo.com/mrss/}content'))[0]
+            content.attrib['url'] = best_audio.url
+            content.attrib['type'] = get_mime_type_by_extension(best_audio.extension)
+            root.append(entry)
+    ET.ElementTree(root).write(args.output, encoding='utf-8', xml_declaration=True)
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
     main()
