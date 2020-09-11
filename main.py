@@ -70,7 +70,10 @@ def main():
         summary = ET.SubElement(entry, '{' + NS_ATOM + '}summary')
         summary.text = summary_to_html(entry)
         yt_link = entry.find('{' + NS_ATOM + '}link').attrib['href']
-        best_audio = pafy.new(yt_link).getbestaudio()
+        try:
+            best_audio = pafy.new(yt_link).getbestaudio()
+        except IOError as e:
+            continue
         if best_audio is not None:
             content = list(entry.iter('{http://search.yahoo.com/mrss/}content'))[0]
             content.attrib['url'] = best_audio.url
