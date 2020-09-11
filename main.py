@@ -9,10 +9,15 @@ from xml.etree import ElementTree as ET
 import pafy
 import pypandoc
 
-
 DEFAULT_LIMIT = 40
 NS_MEDIA = 'http://search.yahoo.com/mrss/'
 NS_ATOM = 'http://www.w3.org/2005/Atom'
+
+try:
+    pypandoc.get_pandoc_version()
+    with_pandoc = True
+except OSError:
+    with_pandoc = False
 
 
 def extract_published(e): return e.find('{' + NS_ATOM + '}published').text
@@ -47,7 +52,9 @@ def get_mime_type_by_extension(extension):
 
 def summary_to_html(entry):
     text = list(entry.iter('{' + NS_MEDIA + '}description'))[0].text
-    return pypandoc.convert_text(text, to='html', format='t2t')
+    if with_pandoc:
+        return pypandoc.convert_text(text, to='html', format='t2t')
+    return text
 
 
 def main():
@@ -69,7 +76,7 @@ def main():
     entries = get_entries(args.opml_file)
 
     for entry in entries[:min(args.limit, len(entries))]:
-        author = entry.find('{' +NS_ATOM + '}author').find('{' + NS_ATOM + '}name').text
+        author = entry.find('{' + NS_ATOM + '}author').find('{' + NS_ATOM + '}name').text
         summary = ET.SubElement(entry, '{' + NS_ATOM + '}summary')
         summary.text = summary_to_html(entry)
         title = entry.find('{' + NS_ATOM + '}title')
@@ -77,7 +84,7 @@ def main():
         yt_link = entry.find('{' + NS_ATOM + '}link').attrib['href']
         try:
             best_audio = pafy.new(yt_link).getbestaudio()
-        except IOError as e:
+        except IOError:
             continue
         if best_audio is not None:
             content = list(entry.iter('{' + NS_MEDIA + '}content'))[0]
