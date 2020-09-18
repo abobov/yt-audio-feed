@@ -52,6 +52,8 @@ def get_mime_type_by_extension(extension):
 
 def summary_to_html(entry):
     text = list(entry.iter('{' + NS_MEDIA + '}description'))[0].text
+    if text is None:
+        return ''
     if with_pandoc:
         return pypandoc.convert_text(text, to='html', format='t2t')
     return text
