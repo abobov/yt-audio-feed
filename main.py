@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import mimetypes
 import multiprocessing
 import signal
@@ -59,11 +60,23 @@ def summary_to_html(entry):
     return text
 
 
+@contextlib.contextmanager
+def smart_open(filename):
+    if filename == '-':
+        fh = sys.stdout.buffer
+    else:
+        fh = open(filename, 'wb')
+    try:
+        yield fh
+    finally:
+        if fh is not sys.stdout.buffer:
+            fh.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('opml_file', help='OPML file from YouTube', type=argparse.FileType('r'))
-    parser.add_argument('-o', '--output', help='Where to print XML output (default: stdout)',
-                        default=sys.stdout.buffer, type=argparse.FileType('wb'))
+    parser.add_argument('-o', '--output', help='Where to print XML output (default: stdout)', default='-')
     parser.add_argument('-n', '--limit', help=f'How many last videos to output (default: {DEFAULT_LIMIT})',
                         type=int, default=DEFAULT_LIMIT)
     args = parser.parse_args()
@@ -76,6 +89,7 @@ def main():
     title = ET.SubElement(root, 'title')
     title.text = 'YouTube subscriptions'
     entries = get_entries(args.opml_file)
+    has_entries = False
 
     for entry in entries[:min(args.limit, len(entries))]:
         author = entry.find('{' + NS_ATOM + '}author').find('{' + NS_ATOM + '}name').text
@@ -93,7 +107,11 @@ def main():
             content.attrib['url'] = best_audio.url
             content.attrib['type'] = get_mime_type_by_extension(best_audio.extension)
             root.append(entry)
-    ET.ElementTree(root).write(args.output, encoding='utf-8', xml_declaration=True)
+            has_entries = True
+
+    if has_entries:
+        with smart_open(args.output) as fh:
+            ET.ElementTree(root).write(fh, encoding='utf-8', xml_declaration=True)
 
 
 if __name__ == '__main__':
